@@ -10,6 +10,7 @@ QUIET_LD        = $(Q:@=@echo    '     LD       '$@;)
 QUIET_GEN       = $(Q:@=@echo    '     GEN      '$@;)
 QUIET_PY2       = $(Q:@=@echo    '     PY2      '$@;)
 QUIET_PY3       = $(Q:@=@echo    '     PY3      '$@;)
+QUIET_PACK		= $(Q:@=@echo    '	   PAC      '$@;)
 
 MKDIR_P         := mkdir -p
 LN_S            := ln -s
@@ -18,6 +19,9 @@ TOP             := $(shell echo $${PWD-`pwd`})
 HOST_CC         := cc
 PY2             := python2
 PY3             := python3
+BOOT			:= boot
+ROOTFSDIR		:= rootfs
+ROOTFSIMG		:= $(BOOT)/rootfs.xz
 
 # try the latest version first
 LLVM_CONFIG     := llvm-config-5.0
@@ -132,6 +136,7 @@ $(O)/%.o: %.c
 
 clean:
 	-rm -rf $(O)
+	rm -f $(BOOT)/rootfs.xz
 
 check: all $(TESTS)
 ifneq ($(UNAME_S),Linux)
@@ -177,30 +182,33 @@ $(KERNEL_ISO): $(KERNEL)
 	$(Q)echo 'default mboot.c32 /$(notdir $(KERNEL))$(if $(APPEND), $(APPEND))$(if $(INITRD), --- /$(notdir $(INITRD)))' > $(@D)/iso/isolinux.cfg
 	$(QUIET_GEN)$(call gen-iso)
 
+$(ROOTFSIMG): $(ROOTFSDIR)/*
+	@rm -f $(ROOTFSIMG)
+	$(QUIET_PACK)cd $(ROOTFSDIR) && find . | cpio -R root:root -H newc -o | xz -9 --check=none > ../$(ROOTFSIMG)
+
 QEMUOPTS += -machine q35,accel=kvm:tcg -cpu $(QEMU_CPU)
 QEMUOPTS += -m 1G
 QEMUOPTS += -device isa-debug-exit
 QEMUOPTS += -debugcon file:/dev/stdout
 QEMUOPTS += -serial mon:stdio -display none
-# QEMUOPTS += -drive file=$(O)/fs.img,media=disk,index=0,format=raw
 
 QEMUGDB := -gdb tcp::10086
 
-qemu: $(VMM_BIN) $(KERNEL)
+qemu: $(VMM_BIN) $(KERNEL) $(ROOTFSIMG)
 ifneq ($(UNAME_S),Linux)
 	$(error works on Linux only)
 else
 	$(QEMU) $(QEMUOPTS) -kernel $(VMM_BIN) -initrd "$(KERNEL)$(if $(APPEND), $(APPEND)),$(if $(INITRD),$(INITRD),/dev/null)" || true
 endif
 
-qemu-gdb: $(VMM_ELF) $(KERNEL)
+qemu-gdb: $(VMM_ELF) $(KERNEL) $(ROOTFSIMG)
 ifneq ($(UNAME_S),Linux)
 	$(error works on Linux only)
 else
 	$(QEMU) $(QEMUOPTS) -S $(QEMUGDB) -kernel $(VMM_ELF) -initrd "$(KERNEL)$(if $(APPEND), $(APPEND)),$(if $(INITRD),$(INITRD),/dev/null)" || true
 endif
 
-qemu-kernel: $(KERNEL)
+qemu-kernel: $(KERNEL) $(ROOTFSIMG)
 	$(QEMU) $(QEMUOPTS) -display sdl -kernel $(KERNEL)$(if $(APPEND), -append $(APPEND))$(if $(INITRD), -initrd $(INITRD)) || true
 
 .PRECIOUS: $(O)/%.o $(O)/%.S

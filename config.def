@@ -8,7 +8,6 @@ O               := o.$(ARCH)
 
 # Guest kernel configuration
 # KERNEL          := $(O)/tests/lv6.bin
-# KERNEL          := boot/isolinux/isolinux.bin
 KERNEL          := boot/vmlinuz-linux
 APPEND          :=
 INITRD          := boot/rootfs.xz

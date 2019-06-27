@@ -10,3 +10,4 @@ tags
 .gdbinit
 boot/vmlinuz*
 boot/init*
+
