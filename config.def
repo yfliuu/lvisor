@@ -1,0 +1,31 @@
+## Project configuration
+
+# CPU architecture (only x86_64 supported for now)
+ARCH            := x86_64
+
+# Output directory
+O               := o.$(ARCH)
+
+# Guest kernel configuration
+# KERNEL          := $(O)/tests/lv6.bin
+# KERNEL          := boot/isolinux/isolinux.bin
+KERNEL          := boot/vmlinuz-linux
+APPEND          :=
+INITRD          := boot/rootfs.xz
+
+# configuration used by Bochs for simulation
+BOCHS_CPU       := broadwell_ult
+
+# configuration used by QEMU for simulation
+# pmu=off: workaround for QEMU/KVM crash when running in VMware
+# https://bugs.launchpad.net/qemu/+bug/1661386
+QEMU_CPU        := max,pmu=off
+
+# Force clang as compiler (default 1 on macOS, 0 on linux)
+# USE_CLANG     := 1
+
+# Override tool prefix
+# TOOLPREFIX    := $(ARCH)-linux-gnu-
+
+# suppress "Entering directory" and "Leaving directory" messages
+MAKEFLAGS       += --no-print-directory

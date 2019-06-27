@@ -1,0 +1,12 @@
+/.gdb_history
+/config.mk
+/o.*
+.DS_Store
+.vscode/
+__pycache__
+_export
+.*.swp
+tags
+.gdbinit
+boot/vmlinuz*
+boot/init*
