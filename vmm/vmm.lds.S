@@ -29,6 +29,10 @@ SECTIONS
         .bss : {
                 *(.bss .bss.*)
         }
+
+        /* Dedicated buffer. This way _end - SZ_2M is guaranteed to be free */
+        . += SZ_2M;
+
         /* EPT uses 2M-pages */
         . = ALIGN(SZ_2M);
         _end = .;

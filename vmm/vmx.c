@@ -299,6 +299,8 @@ static int setup_vmcs_config(struct vmcs_config *vmcs_conf) {
           VM_EXIT_CLEAR_BNDCFGS;
     adjust_vmx_controls(min, opt, MSR_IA32_VMX_EXIT_CTLS, &_vmexit_control);
 
+    // min = 0 | PIN_BASED_VMX_PREEMPTION_TIMER;
+    // min = 0 | PIN_BASED_EXT_INTR_MASK;
     min = 0;
     opt = 0;
     adjust_vmx_controls(min, opt, MSR_IA32_VMX_PINBASED_CTLS,
@@ -656,6 +658,9 @@ static void vmx_vcpu_setup(struct kvm_vcpu *vcpu) {
     vmcs_write32(GUEST_ACTIVITY_STATE, GUEST_ACTIVITY_ACTIVE);
     vmcs_write32(GUEST_INTERRUPTIBILITY_INFO, 0);
     vmcs_writel(GUEST_PENDING_DBG_EXCEPTIONS, 0);
+
+    /* set preemption timer value */
+    vmcs_write32(VMX_PREEMPTION_TIMER_VALUE, 0x3000000);
 
     vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, 0);
 
@@ -1098,13 +1103,66 @@ static void handle_rdtsc(struct kvm_vcpu *vcpu) {
     return kvm_skip_emulated_instruction(vcpu);
 }
 
+static void handle_preemption_timer(struct kvm_vcpu *vcpu) {
+    // if (!to_vmx(vcpu)->req_immediate_exit)
+	   //  kvm_lapic_expired_hv_timer(vcpu);
+    // return;
+
+}
+
+static uintptr_t machine_addr(uint64_t gpa) {
+    uint32_t pml4i, pdpti, pdi;
+    uint64_t ept_ptr, hpa, pdpt_pa, page_2m, pd_pa;
+    pml4i = pml4_index(gpa);
+    pdpti = pdpt_index(gpa);
+    pdi = pd_index(gpa);
+    ept_ptr = vmcs_read64(EPT_POINTER) & ~0x7ff;
+    // pr_err("pml4i: %d, pdpti: %d, pdi: %d\n", pml4i, pdpti, pdi);
+
+    pdpt_pa = ((uint64_t *)__va(ept_ptr))[pml4i] & ~0x7ff;
+    // pr_err("ept_ptr: 0x%lx, pdpt_pa: 0x%lx\n", ept_ptr, pdpt_pa);
+    pd_pa = ((uint64_t *)__va(pdpt_pa))[pdpti] & ~0x7ff;
+    // pr_err("pd_pa: %lx\n", pd_pa);
+    page_2m = ((uint64_t *)__va(pd_pa))[pdi] & ~0x7ff;
+
+    hpa = (uintptr_t)__va(page_2m) | (gpa & 0x1fffff);
+    pr_err("page_2m: 0x%lx, hpa: 0x%lx\n", page_2m, hpa);
+
+    // pr_err("ept_ptr: 0x%lx, pdpt_pa: 0x%lx, pd_pa: %lx, hpa: %lx\n", ept_ptr, pdpt_pa, pd_pa, hpa);
+    return (uintptr_t)__va(hpa);
+}
+
+static void handle_vmcall(struct kvm_vcpu *vcpu) {
+    /* This is just a dummy call, the real one should dispatch based on vmcall number */
+    uint64_t rax, rcx;
+    uintptr_t hva;
+    const char *s = "HELLOOOOOO WORLDDDDDDDD\n";
+    rax = kvm_register_read(vcpu, VCPU_REGS_RAX);
+    rcx = kvm_register_read(vcpu, VCPU_REGS_RCX);
+    hva = machine_addr(rax);
+
+    // pr_err("PHYS ADDRESS: 0x%lx, SZ: 0x%lx, HVA: 0x%lx\n", rax, rcx, hva);
+    if (strlen(s) > rcx) {
+        return kvm_skip_emulated_instruction(vcpu);
+    }
+    strscpy((char *)hva, s, strlen(s));
+    return kvm_skip_emulated_instruction(vcpu);
+}
+
+static void handle_ext_interrupt(struct kvm_vcpu *vcpu) {
+    pr_err("Timer interrupt\n");
+}
+
 static void (*const vmx_exit_handlers[])(struct kvm_vcpu *) = {
+    [EXIT_REASON_EXTERNAL_INTERRUPT] = handle_ext_interrupt,
     [EXIT_REASON_CR_ACCESS] = handle_cr,
     [EXIT_REASON_CPUID] = kvm_emulate_cpuid,
     [EXIT_REASON_MSR_READ] = handle_rdmsr,
     [EXIT_REASON_MSR_WRITE] = handle_wrmsr,
     [EXIT_REASON_XSETBV] = handle_xsetbv,
     [EXIT_REASON_RDTSC] = handle_rdtsc,
+    [EXIT_REASON_PREEMPTION_TIMER] = handle_preemption_timer,
+    [EXIT_REASON_VMCALL] = handle_vmcall,
 };
 
 static void vmx_handle_exit(struct kvm_vcpu *vcpu) {

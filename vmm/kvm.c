@@ -20,6 +20,8 @@ static uint64_t ept_pml4[512] __aligned(PAGE_SIZE);
 static uint64_t ept_pdpt_0_512g[512] __aligned(PAGE_SIZE);
 static uint64_t ept_pd_0_4g[4 * 512] __aligned(PAGE_SIZE);
 
+static void *crvm_buffer;
+
 DEFINE_PER_CPU(struct kvm_vcpu *, current_vcpu);
 
 static void construct_tdp(void) {
@@ -29,6 +31,7 @@ static void construct_tdp(void) {
     BUG_ON(__pa(_start) % SZ_2M);
     BUG_ON(__pa(_end) % SZ_2M);
 
+    // pr_info("ept_pml4: 0x%lx\n", (uint64_t)ept_pml4);
     ept_pml4[0] = __pa(ept_pdpt_0_512g) | rwx;
     for (i = 0; i < 4; ++i)
         ept_pdpt_0_512g[i] = __pa(ept_pd_0_4g + i * 512) | rwx;
@@ -39,8 +42,14 @@ static void construct_tdp(void) {
      */
     for (i = 0, n = __pa(_start) / SZ_2M; i < n; ++i)
         ept_pd_0_4g[i] = (SZ_2M * i) | rwx | EPTE_PSE;
-    for (i = __pa(_end) / SZ_2M, n = SZ_4G / SZ_2M; i < n; ++i)
+    /* for (i = __pa(_end) / SZ_2M, n = SZ_4G / SZ_2M; i < n; ++i)
+        ept_pd_0_4g[i] = (SZ_2M * i) | rwx | EPTE_PSE; */
+
+    /* We allocated a 2M buffer before _end so map from there */
+    for (i = __pa(_end) / SZ_2M - 1, n = SZ_4G / SZ_2M; i < n; ++i)
         ept_pd_0_4g[i] = (SZ_2M * i) | rwx | EPTE_PSE;
+    
+    crvm_buffer = (void *)(_end - SZ_2M);
 }
 
 void kvm_init(void) {

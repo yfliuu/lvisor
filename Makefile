@@ -22,6 +22,7 @@ PY3             := python3
 BOOT			:= boot
 ROOTFSDIR		:= rootfs
 ROOTFSIMG		:= $(BOOT)/rootfs.xz
+DRIVERSDIR		:= drivers
 
 # try the latest version first
 LLVM_CONFIG     := llvm-config-5.0
@@ -136,6 +137,7 @@ $(O)/%.o: %.c
 
 clean:
 	-rm -rf $(O)
+	-rm -f $(ROOTFSDIR)/etc/mod1.ko
 	rm -f $(BOOT)/rootfs.xz
 
 check: all $(TESTS)
@@ -182,8 +184,12 @@ $(KERNEL_ISO): $(KERNEL)
 	$(Q)echo 'default mboot.c32 /$(notdir $(KERNEL))$(if $(APPEND), $(APPEND))$(if $(INITRD), --- /$(notdir $(INITRD)))' > $(@D)/iso/isolinux.cfg
 	$(QUIET_GEN)$(call gen-iso)
 
-$(ROOTFSIMG): $(ROOTFSDIR)/*
+$(DRIVERSDIR)/mod1.ko: $(DRIVERSDIR)/mod1.c
+	$(QUIET_GEN)make -C /lib/modules/5.1.16-arch1-1-ARCH/build/ M=$(realpath $(DRIVERSDIR)) modules
+
+$(ROOTFSIMG): $(ROOTFSDIR)/* $(DRIVERSDIR)/mod1.ko
 	@rm -f $(ROOTFSIMG)
+	@cp $(DRIVERSDIR)/mod1.ko $(ROOTFSDIR)/etc
 	$(QUIET_PACK)cd $(ROOTFSDIR) && find . | cpio -R root:root -H newc -o | xz -9 --check=none > ../$(ROOTFSIMG)
 
 QEMUOPTS += -machine q35,accel=kvm:tcg -cpu $(QEMU_CPU)

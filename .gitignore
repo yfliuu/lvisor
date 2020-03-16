@@ -10,4 +10,12 @@ tags
 .gdbinit
 boot/vmlinuz*
 boot/init*
-
+*.ko
+.idea/
+boot/rootfs.xz
+drivers/*.o
+drivers/*.tmp_versions
+drivers/*.cmd
+drivers/modules.order
+drivers/Module.symvers
+drivers/*.mod.c
